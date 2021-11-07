@@ -68,46 +68,6 @@ seconddigit:
     putchar
     rts
 
-gotoxy:
-    txa
-    pha
-    tya
-    pha
-    print csi
-    pla
-    jsr printhex
-    lda #semicolon
-    putchar
-    pla
-    jsr printhex
-    lda #$48
-    putchar
-    rts
-
-set_fbg_color:
-    pha
-    print csi
-    pla
-    jsr printhex
-    lda #$6d
-    putchar
-    rts
-
-set_fg_bg_color:
-    pha
-    txa
-    pha
-    print csi
-    pla
-    jsr printhex
-    lda #semicolon
-    putchar
-    pla
-    jsr printhex
-    lda #$6d
-    putchar
-    rts
-
 initrand:
     ldx #$65
     stx RANDL
@@ -133,9 +93,7 @@ iszero:
     ror RANDL
     rts
 
-.export doprint, printhex, printhexnolead, gotoxy, putcharn
-.export set_fbg_color, set_fg_bg_color, initrand, rand, clearscreen_str
+.export doprint, printhex, printhexnolead, putcharn
+.export initrand, rand
 
-csi: .byte $1b, "[", 0
 hexdigits: .byte "01234567890ABCDEF"
-clearscreen_str: .byte $1b,"[2J",0

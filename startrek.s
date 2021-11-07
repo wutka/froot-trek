@@ -11,43 +11,64 @@ NEWLINE .set $0d
 
 ESCAPE .set $FF1A
 
-    .import initrand, printhexnolead, putcharn, gotoxy, doprint
-    .import clearscreen_str
+    .import initrand, rand, printhexnolead, putcharn, doprint
 
     .include "lib.inc"
 
     jsr initrand
 mainloop:
-    jsr drawscreen
-
+    jsr init_galaxy
     jmp ESCAPE
     
 
-drawscreen:
-    clearscreen
-    ldx #$01
-    ldy #$01
-    jsr gotoxy
-    print srs
-    ldx #$51
-    ldy #$01
-    jsr gotoxy
-    print lrs
-    putch NEWLINE
+init_galaxy:
+    ldx #63
+@next_cell:
+    jsr rand
+    jsr rand
+    lda RANDH
+    cmp #$fa
+    bcc @try_95
+    bne @k3
+    lda RANDL
+    cmp #$e1
+    bcc @try_95
+@k3: lda #3
+    sta galaxy,x
+    jmp @compute_bases
+@try_95:
+    lda RANDH
+    cmp #$f3
+    bcc @try_80
+    bne @k2
+    lda RANDL
+    cmp #$33
+    bcc @try_80
+@k2: lda #2
+    sta galaxy,x
+    jmp @compute_bases
+@try_80:
+    lda RANDH
+    cmp #$cc
+    bcc @k0
+    bne @k1
+    lda RANDL
+    clc
+    cmp #$cc
+    bcc @k1
+    bne @k0
+@k1: lda #1
+    sta galaxy, x
+    jmp @compute_bases
+@k0: lda #0
+    sta galaxy, x
+@compute_bases:
+    dex
+    bpl @next_cell
+    rts
+
+galaxy: .res 64,0
     
-    lda #DASH
-    ldx #33
-    jsr putcharn
-    ldx #$44
-    ldy #$02
-    jsr gotoxy
-    lda #DASH
-    ldx #30
-    jsr putcharn
-    putch NEWLINE
-
-    jmp ESCAPE
-
 srs: .byte "    Short Range Scanner",0
 lrs: .byte "Long Range Scanner", 0
 energy_str: .byte "Energy:",0
