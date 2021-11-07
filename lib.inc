@@ -10,8 +10,8 @@ RANDBIT .set    $A4
 
 .macro putchar
     .local putready
-putready: bit DSPCR
-    bpl putready
+putready: bit DSP
+    bmi putready
     sta DSP
 .endmacro
 

@@ -4,6 +4,8 @@ DASH .set $2d
 PIPE .set $7c
 NEWLINE .set $0d
 
+SCRATCH .set $20
+
 .macro putch ch
     lda #ch
     putchar
@@ -11,17 +13,21 @@ NEWLINE .set $0d
 
 ESCAPE .set $FF1A
 
-    .import initrand, rand, printhexnolead, putcharn, doprint
+    .import initrand, rand, printhexnolead, putcharn, doprint, hexdigits
 
     .include "lib.inc"
 
     jsr initrand
 mainloop:
     jsr init_galaxy
+    jsr print_galaxy
     jmp ESCAPE
     
 
 init_galaxy:
+    lda #0
+    sta klingons
+    sta bases
     ldx #63
 @next_cell:
     jsr rand
@@ -33,8 +39,12 @@ init_galaxy:
     lda RANDL
     cmp #$e1
     bcc @try_95
-@k3: lda #3
+@k3: lda #$60
     sta galaxy,x
+    lda #3
+    clc
+    adc klingons
+    sta klingons
     jmp @compute_bases
 @try_95:
     lda RANDH
@@ -44,8 +54,12 @@ init_galaxy:
     lda RANDL
     cmp #$33
     bcc @try_80
-@k2: lda #2
+@k2: lda #$40
     sta galaxy,x
+    lda #2
+    clc
+    adc klingons
+    sta klingons
     jmp @compute_bases
 @try_80:
     lda RANDH
@@ -53,21 +67,107 @@ init_galaxy:
     bcc @k0
     bne @k1
     lda RANDL
-    clc
     cmp #$cc
     bcc @k1
     bne @k0
-@k1: lda #1
+@k1: lda #$20
     sta galaxy, x
+    lda #1
+    clc
+    adc klingons
+    sta klingons
     jmp @compute_bases
 @k0: lda #0
     sta galaxy, x
 @compute_bases:
+    jsr rand
+    jsr rand
+    lda RANDH
+    cmp #$f5
+    bcc @compute_stars
+    bne @base
+    lda RANDL
+    cmp #$c2
+    bcc @compute_stars
+@base:
+    lda #$10
+    clc
+    adc galaxy,x
+    sta galaxy,x
+    lda #1
+    clc
+    adc bases
+    sta bases
+    
+@compute_stars:
+    jsr rand
+    jsr rand
+    lda RANDL
+    and #$07
+    clc
+    adc #1
+    clc
+    adc galaxy,x
+    sta galaxy,x
+
     dex
-    bpl @next_cell
+    beq init_done
+    jmp @next_cell
+init_done:
     rts
 
+print_galaxy_cell:
+    sta SCRATCH
+    lsr
+    lsr
+    lsr
+    lsr
+    lsr
+    and #7
+    tay
+    lda hexdigits,y
+    putchar
+    lda SCRATCH
+    lsr
+    lsr
+    lsr
+    lsr
+    and #1
+    tay
+    lda hexdigits,y
+    putchar
+    lda SCRATCH
+    and #$0f
+    tay
+    lda hexdigits,y
+    putchar
+    rts
+
+print_galaxy:
+    lda #$0a
+    putchar
+    ldx #0
+printloop: lda galaxy,x
+    jsr print_galaxy_cell
+    lda #32
+    putchar
+    txa
+    and #7
+    cmp #7
+    bne noret
+    lda #$0a
+    putchar
+noret: inx
+    cpx #64
+    bne printloop
+    rts
+    
+end:
+    .byte 0
+    
 galaxy: .res 64,0
+klingons: .byte 0
+bases: .byte 0
     
 srs: .byte "    Short Range Scanner",0
 lrs: .byte "Long Range Scanner", 0

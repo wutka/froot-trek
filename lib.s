@@ -94,6 +94,6 @@ iszero:
     rts
 
 .export doprint, printhex, printhexnolead, putcharn
-.export initrand, rand
+.export initrand, rand, hexdigits
 
 hexdigits: .byte "01234567890ABCDEF"
