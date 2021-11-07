@@ -42,8 +42,10 @@ init_galaxy:
 @k3: lda #$60
     sta galaxy,x
     lda #3
+    sed
     clc
     adc klingons
+    cld
     sta klingons
     jmp @compute_bases
 @try_95:
@@ -57,9 +59,11 @@ init_galaxy:
 @k2: lda #$40
     sta galaxy,x
     lda #2
+    sed
     clc
     adc klingons
     sta klingons
+    cld
     jmp @compute_bases
 @try_80:
     lda RANDH
@@ -73,8 +77,10 @@ init_galaxy:
 @k1: lda #$20
     sta galaxy, x
     lda #1
+    sed
     clc
     adc klingons
+    cld
     sta klingons
     jmp @compute_bases
 @k0: lda #0
@@ -95,8 +101,10 @@ init_galaxy:
     adc galaxy,x
     sta galaxy,x
     lda #1
+    sed
     clc
     adc bases
+    cld
     sta bases
     
 @compute_stars:
@@ -160,6 +168,14 @@ printloop: lda galaxy,x
 noret: inx
     cpx #64
     bne printloop
+    print klingons_str
+    lda klingons
+    jsr printhexnolead
+    putch NEWLINE
+    print starbases_str
+    lda bases
+    jsr printhexnolead
+    putch NEWLINE
     rts
     
 end:
@@ -177,3 +193,5 @@ torpedoes_str: .byte "Torpedoes:", 0
 engine_str: .byte "Engine:",0
 impulse_str: .byte "Impulse",0
 warp_str: .byte "Warp   ",0
+klingons_str: .byte "Klingons: ",0
+starbases_str: .byte "Star Bases: ", 0
