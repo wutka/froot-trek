@@ -2,7 +2,7 @@
 all: startrek.rom
 
 startrek.rom: startrek.bin
-	bin2rom startrek.bin startrek.rom 400
+	bin2rom startrek.bin startrek.rom a000
 
 startrek.bin: startrek.o lib.o
 	ld65 -C startrek.cfg --dbgfile startrek.dbg -o startrek.bin startrek.o lib.o

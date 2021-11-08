@@ -5,6 +5,9 @@ PIPE .set $7c
 NEWLINE .set $0d
 
 SCRATCH .set $20
+SECT_STARS    .set $21
+SECT_KLINGONS .set $22
+SECT_BASES    .set $23
 
 .macro putch ch
     lda #ch
@@ -21,7 +24,9 @@ ESCAPE .set $FF1A
 mainloop:
     putch NEWLINE
     jsr init_galaxy
-    jsr print_galaxy ; temporary
+    jsr init_enterprise
+    jsr init_sector
+
     jmp ESCAPE
     
 
@@ -29,7 +34,7 @@ init_galaxy:
     lda #0
     sta klingons  ; reset klingon count
     sta bases     ; reset starbase count
-    ldx #64       ; 8x8 galaxy, 64 dells
+    ldx #63       ; 8x8 galaxy, 64 dells
 @next_cell:
     jsr rand      ; compute random number for klingon count
     jsr rand
@@ -146,6 +151,112 @@ init_galaxy:
     print destroy4
     rts
 
+init_enterprise:
+    lda #$00
+    sta enterprise_data+energy_L
+    sta enterprise_data+shields_L
+    sta enterprise_data+shields_H
+    lda #$30
+    sta enterprise_data+energy_H
+    lda #$10
+    sta enterprise_data+torpedoes
+    jsr rand
+    lda RANDL
+    and #$3f
+    sta enterprise_data+loc
+    rts
+
+init_sector:
+    ldx #63
+    lda #0
+@sectorclear:
+    sta sector,x
+    dex
+    bpl @sectorclear
+
+    tax
+    txa
+    lsr
+    lsr
+    lsr
+    lsr
+    and #1
+    sta SECT_BASES
+    txa
+    lsr
+    lsr
+    lsr
+    lsr
+    lsr
+    and #3
+    sta SECT_KLINGONS
+
+    txa
+    and #7
+    sta SECT_STARS
+    tax
+@starloop:
+    jsr rand
+    and #63
+    tax
+    lda sector,x
+    bne @starloop
+    lda #sect_star
+    sta sector,x
+    dec SECT_STARS
+    bne @starloop
+
+    lda SECT_KLINGONS
+    beq @check_for_base
+
+@klingloop:
+    jsr rand
+    and #63
+    tax
+    lda sector,x
+    bne @klingloop
+    lda #sect_kling
+    sta sector,x
+    dec SECT_KLINGONS
+
+    
+    bne @klingloop
+
+@check_for_base:
+    lda SECT_BASES
+    beq @basedone
+
+@baseloop:
+    jsr rand
+    and #63
+    tax
+    lda sector,x
+    bne @baseloop
+    lda #sect_base
+    sta sector,x
+    dec SECT_BASES
+    bne @baseloop
+
+@basedone:
+@entloop:
+    jsr rand
+    and #63
+    tax
+    lda sector,x
+    bne @entloop
+    txa
+    sta enterprise_data+sectloc
+    lda #sect_ent
+    sta sector,x
+
+    rts
+
+
+
+    
+
+    
+    
 print_galaxy_cell:
     sta SCRATCH
     lsr
@@ -173,33 +284,36 @@ print_galaxy_cell:
     putchar
     rts
 
-print_galaxy:
-    lda #$0a
-    putchar
-    ldx #0
-printloop: lda galaxy,x
-    jsr print_galaxy_cell
-    lda #32
-    putchar
-    txa
-    and #7
-    cmp #7
-    bne noret
-    lda #$0a
-    putchar
-noret: inx
-    cpx #64
-    bne printloop
-    putch NEWLINE
-    rts
-    
 end:
     .byte 0
     
-galaxy: .res 64,0
-klingons: .byte 0
-bases: .byte 0
-stardates: .byte 0
+
+galaxy      .set $400
+klingons    .set galaxy+64
+bases       .set klingons +1
+stardates   .set bases+1
+enterprise_data          .set stardates+1
+loc         .set 0
+energy_L    .set 1
+energy_H    .set 2
+shields_L   .set 3
+shields_H   .set 4
+torpedoes   .set 5
+sectloc     .set 6
+
+klingon_data .set enterprise_data+7
+kloc        .set 0
+kshields_L  .set 1
+kshields_H  .set 2
+
+sector      .set klingon_data + 9  ; skip 3 bytes * 3 klingons
+
+sect_ent   .set 1
+sect_kling .set 2
+sect_base  .set 3
+sect_star  .set 4
+
+
 
 destroy1: .byte "YOU MUST DESTROY ",0
 destroy2: .byte " KLINGONS IN ",0
