@@ -12,6 +12,7 @@ RANDBIT .set    $A4
     .local putready
 putready: bit DSP
     bmi putready
+    ora #$80
     sta DSP
 .endmacro
 

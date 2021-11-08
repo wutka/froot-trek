@@ -19,6 +19,7 @@ ESCAPE .set $FF1A
 
     jsr initrand
 mainloop:
+    putch NEWLINE
     jsr init_galaxy
     jsr print_galaxy
     jmp ESCAPE
@@ -122,6 +123,27 @@ init_galaxy:
     beq init_done
     jmp @next_cell
 init_done:
+    lda #$30
+    sta stardates
+
+; make sure there is at least one starbase
+    lda bases
+    bne @baseok
+    lda galaxy+21 ; place it at a fixed location
+    ora #$10
+    sta galaxy+21
+    inc bases
+@baseok:
+    print destroy1
+    lda klingons
+    jsr printhexnolead
+    print destroy2
+    lda stardates
+    jsr printhexnolead
+    print destroy3
+    lda bases
+    jsr printhexnolead
+    print destroy4
     rts
 
 print_galaxy_cell:
@@ -168,13 +190,6 @@ printloop: lda galaxy,x
 noret: inx
     cpx #64
     bne printloop
-    print klingons_str
-    lda klingons
-    jsr printhexnolead
-    putch NEWLINE
-    print starbases_str
-    lda bases
-    jsr printhexnolead
     putch NEWLINE
     rts
     
@@ -184,14 +199,9 @@ end:
 galaxy: .res 64,0
 klingons: .byte 0
 bases: .byte 0
-    
-srs: .byte "    Short Range Scanner",0
-lrs: .byte "Long Range Scanner", 0
-energy_str: .byte "Energy:",0
-shields_str: .byte "Shields:", 0
-torpedoes_str: .byte "Torpedoes:", 0
-engine_str: .byte "Engine:",0
-impulse_str: .byte "Impulse",0
-warp_str: .byte "Warp   ",0
-klingons_str: .byte "Klingons: ",0
-starbases_str: .byte "Star Bases: ", 0
+stardates: .byte 0
+
+destroy1: .byte "YOU MUST DESTROY ",0
+destroy2: .byte " KLINGONS IN ",0
+destroy3: .byte " STARDATES WITH ",0
+destroy4: .byte " STARBASES", $0a, 0

@@ -12,12 +12,11 @@ KBD .set $d010
 .include "lib.inc"
 
 doprint:
-   lda (PRTL),Y
+    lda (PRTL),Y
     beq P2
     putchar
-    clc
     inc PRTL
-    bcc doprint
+    bne doprint
     inc PRTH
     bne doprint
 P2: rts
@@ -96,4 +95,4 @@ iszero:
 .export doprint, printhex, printhexnolead, putcharn
 .export initrand, rand, hexdigits
 
-hexdigits: .byte "01234567890ABCDEF"
+hexdigits: .byte "0123456789ABCDEF"
