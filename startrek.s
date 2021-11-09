@@ -26,6 +26,7 @@ mainloop:
     jsr init_galaxy
     jsr init_enterprise
     jsr init_sector
+    jsr print_sector
 
     jmp ESCAPE
     
@@ -174,6 +175,7 @@ init_sector:
     dex
     bpl @sectorclear
 
+    lda enterprise_data+loc
     tax
     txa
     lsr
@@ -218,8 +220,6 @@ init_sector:
     lda #sect_kling
     sta sector,x
     dec SECT_KLINGONS
-
-    
     bne @klingloop
 
 @check_for_base:
@@ -251,11 +251,31 @@ init_sector:
 
     rts
 
+print_sector:
+    ldx #0
+sectrow:
+    lda sector,x
+    asl
+    asl
+    clc
+    adc #<sect_image
+    sta PRTL
+    adc #>sect_image
+    sta PRTH
+    ldy #0
+    jsr doprint
+    txa
+    and #7
+    cmp #7
+    bne nocr
+    putch NEWLINE
 
+nocr:
+    inx
+    cpx #64
+    bne sectrow
+    rts
 
-    
-
-    
     
 print_galaxy_cell:
     sta SCRATCH
@@ -313,6 +333,12 @@ sect_kling .set 2
 sect_base  .set 3
 sect_star  .set 4
 
+sect_image:
+nothing:    .byte "   ",0
+ent_ship:   .byte "-_=",0
+kling_ship: .byte "<o>",0
+starbase:   .byte ">I<",0
+star:       .byte " * ",0
 
 
 destroy1: .byte "YOU MUST DESTROY ",0
