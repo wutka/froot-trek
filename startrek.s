@@ -177,7 +177,8 @@ init_sector:
 
     lda enterprise_data+loc
     tax
-    txa
+    lda galaxy,x
+    tax
     lsr
     lsr
     lsr
@@ -199,6 +200,7 @@ init_sector:
     tax
 @starloop:
     jsr rand
+    lda RANDL
     and #63
     tax
     lda sector,x
@@ -213,6 +215,7 @@ init_sector:
 
 @klingloop:
     jsr rand
+    lda RANDL
     and #63
     tax
     lda sector,x
@@ -228,6 +231,7 @@ init_sector:
 
 @baseloop:
     jsr rand
+    lda RANDL
     and #63
     tax
     lda sector,x
@@ -240,6 +244,7 @@ init_sector:
 @basedone:
 @entloop:
     jsr rand
+    lda RANDL
     and #63
     tax
     lda sector,x
@@ -260,6 +265,7 @@ sectrow:
     clc
     adc #<sect_image
     sta PRTL
+    lda #0
     adc #>sect_image
     sta PRTH
     ldy #0
