@@ -26,7 +26,80 @@ mainloop:
     jsr init_galaxy
     jsr init_enterprise
     jsr init_sector
-    jsr print_sector
+
+commandloop:
+    print command
+    getch
+    and #$7f
+    cmp #$30  ; 0
+    bne @check1
+    jmp setcourse
+@check1:
+    cmp #$31
+    bne @check2
+    jmp srs
+@check2:
+    cmp #$32
+    bne @check3
+    jmp lrs
+@check3:
+    cmp #$33
+    bne @check4
+    jmp firephasers
+@check4:
+    cmp #$34
+    bne @check5
+    jmp firetorps
+@check5:
+    cmp #$35
+    bne @check6
+    jmp shieldcontrol
+@check6:
+    cmp #$36
+    bne @check7
+    jmp damagecontrol
+@check7:
+    cmp #$37
+    bne @check8
+    jmp librarycomputer
+@check8:
+    cmp #$38
+    bne showhelp
+    jmp endcontest
+
+showhelp:
+    print help
+    jmp commandloop
+
+setcourse:
+    jmp commandloop
+
+srs:
+    jmp commandloop
+
+lrs:
+    jmp commandloop
+
+firephasers:
+    jmp commandloop
+
+firetorps:
+    jmp commandloop
+
+shieldcontrol:
+    jmp commandloop
+
+damagecontrol:
+    jmp commandloop
+
+librarycomputer:
+    jmp commandloop
+
+endcontest:
+    jmp ESCAPE
+
+
+;    jsr print_sector
 
     jmp ESCAPE
     
@@ -213,6 +286,16 @@ init_sector:
     lda SECT_KLINGONS
     beq @check_for_base
 
+    tax
+    lda enterprise_data+shields_H
+    cmp #$02
+    bcs @klingloop
+    bne @danger
+    cmp #$00
+    beq @klingloop
+@danger:
+    print combat
+
 @klingloop:
     jsr rand
     lda RANDL
@@ -351,3 +434,16 @@ destroy1: .byte "YOU MUST DESTROY ",0
 destroy2: .byte " KLINGONS IN ",0
 destroy3: .byte " STARDATES WITH ",0
 destroy4: .byte " STARBASES", $0a, 0
+combat: .byte "COMBAT AREA      CONDITION RED",$0a
+        .byte "   SHIELDS DANGEROUSLY LOW",$0a,0
+command: .byte "COMMAND:",0
+help:   .byte $0a
+        .byte "  0 = SET COURSE", $0a
+        .byte "  1 = SHORT RANGE SENSOR SCAN", $0a
+        .byte "  2 = LONG RANGE SENSOR SCAN", $0a
+        .byte "  3 = FIRE PHASERS", $0a
+        .byte "  4 = FIRE PHOTON TORPEDOES",$0a
+        .byte "  5 = SHIELD CONTROL", $0a
+        .byte "  6 = DAMAGE CONTROL REPORT", $0a
+        .byte "  7 = CALL ON LIBRARY COMPUTER", $0a
+        .byte "  8 = END THE CONTEST", $0a, $0a, 0

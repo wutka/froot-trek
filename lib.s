@@ -1,14 +1,5 @@
 .segment "LIB"
 
-semicolon .set $3b
-
-RANDL .set      $A2
-RANDH .set      $A3
-RANDBIT .set    $A4
-
-KBDCR .set $d011
-KBD .set $d010
-
 .include "lib.inc"
 
 doprint:

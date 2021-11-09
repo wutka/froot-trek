@@ -8,6 +8,9 @@ RANDL .set      $A2
 RANDH .set      $A3
 RANDBIT .set    $A4
 
+KBDCR .set $d011
+KBD .set $d010
+
 .macro putchar
     .local putready
 putready: bit DSP
