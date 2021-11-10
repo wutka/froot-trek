@@ -9,6 +9,9 @@ SECT_STARS    .set $21
 SECT_KLINGONS .set $22
 SECT_BASES    .set $23
 
+COURSE .set 24
+WARP   .set 25
+
 .macro putch ch
     lda #ch
     putchar
@@ -72,7 +75,68 @@ showhelp:
     jmp commandloop
 
 setcourse:
+    print course_str
+    getch
+    cmp #30
+    beq goback1
+    bcc invalid_course
+    cmp #38
+    bcs invalid_course
+    clc
+    sbc #31
+    sta COURSE
+    jmp warporimpulse
+
+goback1:
     jmp commandloop
+
+warporimpulse:
+    print warp_or_impulse_str
+    cmp #$57
+    beq warpprompt
+    cmp #$49
+    bne setcourse
+    jmp impulseprompt
+
+warpprompt:
+    print warp_str
+    getch
+    cmp #30
+    beq goback1
+    cmp #38
+    bcs warpprompt
+
+    clc
+    sbc #30
+    sta WARP
+
+    lda damage+dam_warp
+    beq @warp_ok
+    print warp_damaged
+    jmp impulseprompt
+    
+@warp_ok:
+    lda enterprise_data+loc
+    tax
+    lda galaxy,x
+    lsr
+    lsr
+    lsr
+    lsr
+    lsr
+    beq @noklingons
+    jsr compute_attack
+
+@noklingons:
+
+
+
+impulseprompt:
+
+
+invalid_course:
+    print course_help
+    jmp setcourse
 
 srs:
     jmp commandloop
@@ -98,6 +162,17 @@ librarycomputer:
 endcontest:
     jmp ESCAPE
 
+
+compute_attack:
+    tay
+    jsr check_docked
+    beq @no_dock
+    print base_protect
+    rts
+
+@no_dock:
+    tya
+    rts
 
 ;    jsr print_sector
 
@@ -238,6 +313,12 @@ init_enterprise:
     lda RANDL
     and #$3f
     sta enterprise_data+loc
+    lda #$00
+    ldx #$07
+@init_damloop:
+    sta damage,x
+    dex
+    bpl @init_damloop
     rts
 
 init_sector:
@@ -339,6 +420,39 @@ init_sector:
 
     rts
 
+check_docked:
+    lda enterprise_data+sectloc
+    and #7
+    tax
+    beq @checkright
+    lda enterprise_data+sectloc
+    clc
+    sbc #1
+    tax
+    lda sector, x
+    cmp #sect_base
+    bne @checkright
+    lda #1
+    rts
+@checkright:
+    lda enterprise_data+sectloc
+    and #7
+    cmp #7
+    beq @nobase
+    clc
+    adc #1
+    tax
+    lda sector, x
+    cmp #sect_base
+    bne @nobase
+    lda #1
+    rts
+@nobase:
+    lda #0
+    rts
+
+
+
 print_sector:
     ldx #0
 sectrow:
@@ -409,8 +523,10 @@ shields_L   .set 3
 shields_H   .set 4
 torpedoes   .set 5
 sectloc     .set 6
+damage      .set enterprise_data+7
 
-klingon_data .set enterprise_data+7
+
+klingon_data .set damage+8
 kloc        .set 0
 kshields_L  .set 1
 kshields_H  .set 2
@@ -447,3 +563,41 @@ help:   .byte $0a
         .byte "  6 = DAMAGE CONTROL REPORT", $0a
         .byte "  7 = CALL ON LIBRARY COMPUTER", $0a
         .byte "  8 = END THE CONTEST", $0a, $0a, 0
+
+course_str: .byte $0a,"COURSE (1-8):", $0a
+warp_str:   .byte $0a,"WARP FACTOR (0-8):", $0a
+warp_or_impulse_str: .byte $0a,"(W)ARP OR (I)MPULSE DRIVE?",0
+course_help: .byte $0a
+        .byte "    3",$0a
+        .byte "  4 | 2", $0a
+        .byte "5---X---1", $0a
+        .byte "  6 | 8", $0a
+        .byte "    7", $0a, 0
+
+dam_warp   .set 0
+dam_srs    .set 1
+dam_lrs    .set 2
+dam_phaser .set 3
+dam_photon .set 4
+dam_dam    .set 5
+dam_shield .set 6
+dam_comp   .set 7
+
+damage0: .byte "WARP ENGINES",0
+damage1: .byte "S.R. SENSORS",0
+damage2: .byte "L.R. SENSORS",0
+damage3: .byte "PHASER CNTRL",0
+damage4: .byte "PHOTON TUBES",0
+damage5: .byte "DAMAGE CNTRL",0
+damage6: .byte "SHIELD CNTRL",0
+damage7: .byte "COMPUTER",0
+
+damage_names:
+    .word dam_warp, dam_srs, dam_lrs, dam_phaser
+    .word dam_photon, dam_dam, dam_shield, dam_comp
+
+warp_damaged: .byte $0a
+    .byte "WARP ENGINES ARE DAMAGED, USE IMPULSE DRIVE",$0a,0
+base_protect: .byte $0a
+    .byte "STAR BASE SHIELDS PROTECT THE ENTERPRISE",$0a,0
+    
