@@ -171,7 +171,9 @@ compute_attack:
     rts
 
 @no_dock:
-    tya
+    tya     ; reg Y contains # of Klingons
+
+    
     rts
 
 ;    jsr print_sector
