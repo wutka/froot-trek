@@ -10,7 +10,13 @@ SECT_KLINGONS .set $22
 SECT_BASES    .set $23
 
 COURSE .set 24
-WARP   .set 25
+SPEED   .set 25
+
+RND99 .set 26
+EDGEHIT .set 27
+NEWSEC .set 28
+SECX   .set 29
+SECY   .set 30
 
 .macro putch ch
     lda #ch
@@ -87,6 +93,10 @@ setcourse:
     sta COURSE
     jmp warporimpulse
 
+invalid_course:
+    print course_help
+    jmp setcourse
+
 goback1:
     jmp commandloop
 
@@ -103,12 +113,12 @@ warpprompt:
     getch
     cmp #30
     beq goback1
-    cmp #38
+    cmp #37
     bcs warpprompt
 
     clc
     sbc #30
-    sta WARP
+    sta SPEED
 
     lda damage+dam_warp
     beq @warp_ok
@@ -126,17 +136,278 @@ warpprompt:
     lsr
     beq @noklingons
     jsr compute_attack
+    lda destroyed
+    beq @noklingons
+    jmp ent_destroyed
 
 @noklingons:
+    ldx #0
+    stx EDGEHIT
+    ldy COURSE
+    lda course_x_diff,y
+    cmp #0
+    bmi @subx
+    beq @compute_y
+    lda enterprise_data+loc
+    and #07
+    clc
+    adc SPEED
+    cmp #7
+    bcc @xok
+    lda #7
+    inc EDGEHIT
+    jmp @xok
 
+@subx:
+    lda enterprise_data+loc
+    and #07
+    clc
+    sbc SPEED
+    bcc @xok
+    inc EDGEHIT
+    lda #0
+@xok:
+    tax
 
+@compute_y:
+    lda course_y_diff, y
+    cmp #0
+    bmi @suby
+    bpl @addy
+    ldy #0
+    jmp @yok
+
+@addy:
+    lda enterprise_data+loc
+    lsr
+    lsr
+    lsr
+    clc
+    adc SPEED
+    cmp #7
+    bcc @yok
+    lda #7
+    inc EDGEHIT
+    jmp @yok
+
+@suby:
+    lda enterprise_data+loc
+    lsr
+    lsr
+    lsr
+    clc
+    sbc SPEED
+    bcc @yok
+    lda #0
+    inc EDGEHIT
+
+@yok:
+    stx SCRATCH
+    asl
+    asl
+    asl
+    clc
+    adc SCRATCH
+    sta enterprise_data+loc
+    lda EDGEHIT
+    beq @nohit
+    print edge
+@nohit:
+    jsr init_sector
+    jmp commandloop
+
+goback2:
+    jmp commandloop
 
 impulseprompt:
+    print impulse_str
+    getch
+    cmp #30
+    beq goback2
+    cmp #37
+    bcs impulseprompt
 
+    clc
+    sbc #30
+    sta SPEED
 
-invalid_course:
-    print course_help
-    jmp setcourse
+    lda enterprise_data+loc
+    tax
+    lda sector,x
+    lsr
+    lsr
+    lsr
+    lsr
+    lsr
+    beq @noklingons
+    jsr compute_attack
+    lda destroyed
+    beq @noklingons
+    jmp ent_destroyed
+
+@noklingons:
+    ldx #0
+    stx EDGEHIT
+    stx NEWSEC
+    ldy COURSE
+    lda course_x_diff,y
+    cmp #0
+    bmi @subx
+    beq @compute_y
+    lda enterprise_data+sectloc
+    and #07
+    clc
+    adc SPEED
+    cmp #7
+    bcc @xok
+    inc NEWSEC
+    clc
+    sbc #8
+    sta SECX
+    lda enterprise_data+loc
+    and #7
+    clc
+    adc #1
+    sta SCRATCH
+    cmp #7
+    bcc @nogalxhit
+    inc EDGEHIT
+    lda #7
+    sta SCRATCH
+@nogalxhit:
+    lda enterprise_data+loc
+    and #$70
+    ora SCRATCH
+    sta enterprise_data+loc
+    lda SECX
+    jmp @xok
+
+@subx:
+    lda enterprise_data+loc
+    and #$0f
+    clc
+    sbc SPEED
+    bcc @xok
+    inc NEWSEC
+    clc
+    adc #8
+    sta SECX
+    lda enterprise_data+loc
+    and #7
+    clc
+    sbc #1
+    sta SCRATCH
+    bcc @nogalxhit2
+    inc EDGEHIT
+    lda #0
+    sta SCRATCH
+@nogalxhit2:
+    lda enterprise_data+loc
+    and #$70
+    ora SCRATCH
+    sta enterprise_data+loc
+    lda SECX
+    jmp @xok
+@xok:
+    tax
+
+@compute_y:
+    lda course_y_diff, y
+    cmp #0
+    bmi @suby
+    bpl @addy
+    ldy #0
+    jmp @yok
+
+@addy:
+    lda enterprise_data+sectloc
+    lsr
+    lsr
+    lsr
+    clc
+    adc SPEED
+    cmp #7
+    bcc @yok
+    inc NEWSEC
+    clc
+    sbc #8
+    sta SECY
+    lda enterprise_data+loc
+    lsr
+    lsr
+    lsr
+    clc
+    adc #1
+    sta SCRATCH
+    cmp #7
+    bcc @nogalyhit
+    inc EDGEHIT
+    lda #7
+    sta SCRATCH
+@nogalyhit:
+    lda enterprise_data+loc
+    and #$07
+    asl SCRATCH
+    asl SCRATCH
+    asl SCRATCH
+    ora SCRATCH
+    sta enterprise_data+loc
+    lda SECY
+    jmp @yok
+
+@suby:
+    lda enterprise_data+loc
+    lsr
+    lsr
+    lsr
+    clc
+    sbc SPEED
+    bcc @yok
+    lda #0
+    inc NEWSEC
+    clc
+    adc #8
+    sta SECY
+    lda enterprise_data+loc
+    lsr
+    lsr
+    lsr
+    clc
+    sbc #1
+    sta SCRATCH
+    bne @nogalyhit2
+    inc EDGEHIT
+    lda #0
+    sta SCRATCH
+
+@nogalyhit2:
+    lda enterprise_data+loc
+    and #$07
+    asl SCRATCH
+    asl SCRATCH
+    asl SCRATCH
+    ora SCRATCH
+    sta enterprise_data+loc
+    lda SECY
+
+@yok:
+    stx SCRATCH
+    asl
+    asl
+    asl
+    clc
+    adc SCRATCH
+    sta enterprise_data+sectloc
+    lda EDGEHIT
+    beq @nohit
+    print iedge
+@nohit:
+    lda NEWSEC
+    beq @nonewsector
+    print newsector
+    jsr init_sector
+@nonewsector:
+    jmp commandloop
 
 srs:
     jmp commandloop
@@ -171,15 +442,58 @@ compute_attack:
     rts
 
 @no_dock:
-    tya     ; reg Y contains # of Klingons
+@attackloop:
+    jsr rand99
+    lda RND99
+    bne @klinghit
+    print klingon_miss
+    jmp @nextklingon
 
-    
+@klinghit:
+    print klingon_hit1
+    jsr printhexnolead
+    print klingon_hit2
+    lda enterprise_data+shields_L
+    clc
+    sbc RND99
+    sta enterprise_data+shields_L
+    lda enterprise_data+shields_H
+    sbc #$0 ; See if there was a borrow
+    bcs blown_up
+@nextklingon:
+    dey
+    bne @attackloop
     rts
+
+blown_up:
+    lda #1
+    sta destroyed
+    rts
+
+ent_destroyed:
+    print dead
+    lda klingons
+    jsr printhexnolead
+    print dead2
+    jmp mainloop
+    
 
 ;    jsr print_sector
 
     jmp ESCAPE
     
+rand99:
+    jsr rand
+    sta RND99
+    and #$0f
+    cmp #$09
+    bcs rand99
+    lda RND99
+    and #$f0
+    cmp #$90
+    bcs rand99
+    rts
+
 
 init_galaxy:
     lda #0
@@ -307,6 +621,7 @@ init_enterprise:
     sta enterprise_data+energy_L
     sta enterprise_data+shields_L
     sta enterprise_data+shields_H
+    sta destroyed
     lda #$30
     sta enterprise_data+energy_H
     lda #$10
@@ -540,10 +855,12 @@ sect_kling .set 2
 sect_base  .set 3
 sect_star  .set 4
 
+destroyed  .set sector+64
+
 sect_image:
 nothing:    .byte "   ",0
 ent_ship:   .byte "-_=",0
-kling_ship: .byte "<o>",0
+kling_ship: .byte "o-z",0
 starbase:   .byte ">I<",0
 star:       .byte " * ",0
 
@@ -566,8 +883,9 @@ help:   .byte $0a
         .byte "  7 = CALL ON LIBRARY COMPUTER", $0a
         .byte "  8 = END THE CONTEST", $0a, $0a, 0
 
-course_str: .byte $0a,"COURSE (1-8):", $0a
-warp_str:   .byte $0a,"WARP FACTOR (0-8):", $0a
+course_str: .byte $0a,"COURSE (1-8):", $00
+warp_str:   .byte $0a,"WARP FACTOR (0-7):", $00
+impulse_str:   .byte $0a,"IMPULSE LEVEL (0-7):", $00
 warp_or_impulse_str: .byte $0a,"(W)ARP OR (I)MPULSE DRIVE?",0
 course_help: .byte $0a
         .byte "    3",$0a
@@ -575,6 +893,9 @@ course_help: .byte $0a
         .byte "5---X---1", $0a
         .byte "  6 | 8", $0a
         .byte "    7", $0a, 0
+
+course_x_diff: .byte 1, 1, 0, 255, 255, 255, 0, 1
+course_y_diff: .byte 0, 255, 255, 255, 0, 1, 1, 1
 
 dam_warp   .set 0
 dam_srs    .set 1
@@ -603,3 +924,26 @@ warp_damaged: .byte $0a
 base_protect: .byte $0a
     .byte "STAR BASE SHIELDS PROTECT THE ENTERPRISE",$0a,0
     
+dead: .byte $0a
+    .byte "THE ENTERPRISE HAS BEEN DESTROYED.",$0a
+    .byte "THE FEDERATION WILL BE CONQUERED.",$0a
+    .byte "THERE ARE STILL ",0
+dead2: .byte " KLINGON BATTLE CRUISERS.",$0a,$0a,$0a
+    .byte "YOU GET ANOTHER CHANCE....",$0a,0
+
+edge: .byte $0a
+    .byte "THE WARP ENGINES SAFELY SHUTDOWN AS YOU",$0a
+    .byte "ENCOUNTER THE EDGE OF THE GALAXY.",$0a,0
+
+iedge: .byte $0a
+    .byte "THE IMPULSE ENGINES SAFELY SHUTDOWN AS",$0a
+    .byte "YOU ENCOUNTER THE EDGE OF THE GALAXY.",$0a,0
+
+newsector: .byte $0
+    .byte "YOU HAVE ENTERED A NEW SECTOR.",$0a,0
+
+klingon_hit1: .byte $0a
+    .byte "KLINGON CRUISER HITS YOU WITH ",$0
+klingon_hit2: .byte " STROMS",$0a,0
+klingon_miss: .byte $0a
+    .byte "KLINGON BLAST MISSES YOU",$0a,0
