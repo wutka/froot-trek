@@ -3,6 +3,7 @@
 DASH .set $2d
 PIPE .set $7c
 NEWLINE .set $0d
+COMMA .set $2c
 
 SCRATCH .set $20
 SECT_STARS    .set $21
@@ -37,6 +38,7 @@ mainloop:
     jsr init_sector
 
 commandloop:
+    jsr print_location
     print command
     getch
     and #$7f
@@ -83,13 +85,14 @@ showhelp:
 setcourse:
     print course_str
     getch
-    cmp #30 ; 0?
+    clc
+    cmp #$30 ; 0?
     beq goback1
     bcc invalid_course  ; if < 0, invalid
-    cmp #38
+    cmp #$38
     bcs invalid_course  ; if > 8, invalid
     clc
-    sbc #31 ; convert ASCII 1-8 to 0-7
+    sbc #$31 ; convert ASCII 1-8 to 0-7
     sta COURSE
     jmp warporimpulse
 
@@ -124,7 +127,7 @@ warpprompt:
     bcs warpprompt  ; if > 7, prompt again for warp
 
     clc
-    sbc #30     ; convert ASCII to number 1-7
+    sbc #$30     ; convert ASCII to number 1-7
     sta SPEED
 
     lda damage+dam_warp  ; see if warp drive is damaged
@@ -235,7 +238,7 @@ impulseprompt:
     bcs impulseprompt   ; if > 7, prompt again for impulse
 
     clc
-    sbc #30             ; convert speed to numeric 1-7
+    sbc #$30             ; convert speed to numeric 1-7
     sta SPEED
 
     lda enterprise_data+loc  ; get the current enterprise loc
@@ -417,10 +420,123 @@ impulseprompt:
     jmp commandloop
 
 srs:
+    jsr print_sector
     jmp commandloop
 
 lrs:
+    print lrs_header
+    print row_sep
+
+    lda enterprise_data+loc
+    and #38             ; mask out y
+    bne print_first_row
+    print blank_row
+    jmp print_middle_row
+print_first_row:
+    lda enterprise_data+loc
+    clc
+    sbc #8
+    jsr print_row
+
+print_middle_row:
+    print row_sep
+    lda enterprise_data+loc
+    jsr print_row
+
+    print row_sep
+
+    lda enterprise_data+loc
+    and #38
+    cmp #38
+    bne print_third_row
+    print blank_row
+    print row_sep
     jmp commandloop
+
+print_third_row:
+    lda enterprise_data+loc
+    clc
+    adc #8
+    jsr print_row
+    print row_sep
+    jmp commandloop
+    
+print_row:
+    tax
+    and #7
+    bne print_first_cell
+    print blank_cell
+    jmp print_second_cell
+print_first_cell:
+    print cell_header
+    txa
+    clc
+    sbc #1
+    tay
+    lda galaxy,y
+    jsr print_galaxy_cell
+    lda #32
+    putchar
+
+print_second_cell:
+    txa
+    tay
+    print cell_header
+    lda galaxy,y
+    jsr print_galaxy_cell
+    lda #32
+    putchar
+
+    txa
+    and #7
+    cmp #7
+    bne print_third_cell
+    print blank_cell
+    jmp print_cell_end
+
+print_third_cell:
+    print cell_header
+    txa
+    clc
+    adc #1
+    tay
+    lda galaxy,y
+    jsr print_galaxy_cell
+    lda #32
+    putchar
+
+print_cell_end:
+    print cell_line_end
+    rts
+
+print_location:
+    print coords
+    lda enterprise_data+sectloc
+    and #7
+    jsr printhexnolead
+    lda #COMMA
+    putchar
+    lda enterprise_data+sectloc
+    lsr
+    lsr
+    lsr
+    jsr printhexnolead
+    print coords2
+    lda enterprise_data+loc
+    and #7
+    jsr printhexnolead
+    lda #COMMA
+    putchar
+    lda enterprise_data+loc
+    lsr
+    lsr
+    lsr
+    jsr printhexnolead
+    lda #NEWLINE
+    putchar
+    rts
+
+
 
 firephasers:
     jmp commandloop
@@ -782,7 +898,6 @@ check_docked:
     rts
 
 
-
 print_sector:
     ldx #0
 sectrow:
@@ -907,8 +1022,8 @@ course_help: .byte $0a
         .byte "  6 | 8", $0a
         .byte "    7", $0a, 0
 
-course_x_diff: .byte 1, 1, 0, 255, 255, 255, 0, 1
-course_y_diff: .byte 0, 255, 255, 255, 0, 1, 1, 1
+course_x_diff: .byte 1, 1,   0,   255, 255, 255, 0, 1
+course_y_diff: .byte 0, 255, 255, 255, 0,   1,   1, 1
 
 dam_warp   .set 0
 dam_srs    .set 1
@@ -960,3 +1075,13 @@ klingon_hit1: .byte $0a
 klingon_hit2: .byte " STROMS",$0a,0
 klingon_miss: .byte $0a
     .byte "KLINGON BLAST MISSES YOU",$0a,0
+
+lrs_header: .byte "  LONG RANGE SCAN",$0a,0
+row_sep:    .byte "+-----+-----+-----+",$0a,0
+blank_row:  .byte "| --- | --- | --- |",$0a,0
+blank_cell: .byte "| --- ",0
+cell_header: .byte "| ",0
+cell_line_end: .byte "|",$0a,0
+
+coords: .byte "YOU ARE AT LOCATION ",0
+coords2: .byte " IN SECTOR ",0

@@ -35,4 +35,5 @@ getchloop:
     bit KBDCR
     bpl getchloop
     lda KBD
+    and #$7f
 .endmacro
