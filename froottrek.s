@@ -29,7 +29,7 @@ ESCAPE .set $FF1A
 
     .include "lib.inc"
 
-    jsr initrand
+    jsr initrand    ; initialize the rando number generator
 mainloop:
     putch NEWLINE
     jsr init_galaxy
@@ -83,13 +83,13 @@ showhelp:
 setcourse:
     print course_str
     getch
-    cmp #30
+    cmp #30 ; 0?
     beq goback1
-    bcc invalid_course
+    bcc invalid_course  ; if < 0, invalid
     cmp #38
-    bcs invalid_course
+    bcs invalid_course  ; if > 8, invalid
     clc
-    sbc #31
+    sbc #31 ; convert ASCII 1-8 to 0-7
     sta COURSE
     jmp warporimpulse
 
@@ -102,310 +102,317 @@ goback1:
 
 warporimpulse:
     print warp_or_impulse_str
-    cmp #$57
+    getch
+    cmp #$57    ; W
     beq warpprompt
-    cmp #$49
+    cmp #$77    ; w
+    beq warpprompt
+    cmp #$49    ; I
+    beq @goimpulse
+    cmp #$69    ; i
     bne setcourse
+@goimpulse:
     jmp impulseprompt
 
 warpprompt:
     print warp_str
     getch
-    cmp #30
-    beq goback1
-    cmp #37
-    bcs warpprompt
+    cmp #$30        ; compare char to ascii 0
+    beq goback1     ; if = 0, go back to command prompt
+    bcc warpprompt  ; if < 0, prompt again for warp
+    cmp #$37        ; compare char to ascii 7
+    bcs warpprompt  ; if > 7, prompt again for warp
 
     clc
-    sbc #30
+    sbc #30     ; convert ASCII to number 1-7
     sta SPEED
 
-    lda damage+dam_warp
+    lda damage+dam_warp  ; see if warp drive is damaged
     beq @warp_ok
     print warp_damaged
     jmp impulseprompt
     
 @warp_ok:
-    lda enterprise_data+loc
+    lda enterprise_data+loc ; Get the current enterprise loc
     tax
-    lda galaxy,x
+    lda galaxy,x    ; look at this section of galaxy
+    lsr             ; shift right 5 positions to get # of klingons
     lsr
     lsr
     lsr
     lsr
-    lsr
-    beq @noklingons
-    jsr compute_attack
-    lda destroyed
-    beq @noklingons
-    jmp ent_destroyed
+    beq @noklingons     ; if no klingons, no attack
+    jsr compute_attack  ; compute klingon attack
+    lda destroyed       ; see if attack destroyed the Enterprise
+    beq @noklingons     ; otherwise, do the move
+    jmp ent_destroyed   
 
 @noklingons:
-    ldx #0
+    ldx #0              ; clear edge-of-the-galaxy flag
     stx EDGEHIT
-    ldy COURSE
-    lda course_x_diff,y
-    cmp #0
-    bmi @subx
-    beq @compute_y
+    ldy COURSE          ; get the current course
+    lda course_x_diff,y ; see how this course affects the x coord
+    bmi @subx           ; if it negative, subtract
+    beq @compute_y      ; if it is zero, just compute y
     lda enterprise_data+loc
-    and #07
+    and #07             ; mask out the y
     clc
-    adc SPEED
-    cmp #7
+    adc SPEED           ; add the speed to x
+    cmp #7              ; see if we have hit the edge of the galaxy
     bcc @xok
-    lda #7
-    inc EDGEHIT
+    lda #7              ; set x to rightmost edge
+    inc EDGEHIT         ; flag that the edge was hit
     jmp @xok
 
 @subx:
     lda enterprise_data+loc
-    and #07
+    and #07             ; mask out the y
     clc
-    sbc SPEED
-    bcc @xok
-    inc EDGEHIT
-    lda #0
+    sbc SPEED           ; subtract the speed from x
+    bcc @xok            ; see if we hit the edge of the galaxy
+    inc EDGEHIT         ; flag that the edge was hit
+    lda #0              ; set x to leftmost edge
 @xok:
-    tax
+    tax                 ; copy x coord to x register
 
 @compute_y:
-    lda course_y_diff, y
-    cmp #0
-    bmi @suby
-    bpl @addy
-    ldy #0
-    jmp @yok
+    lda course_y_diff, y    ; how does this course affect y?
+    bmi @suby           ; if negative, subtract from y
+    bne @addy           ; if non-zero, add to y
+    lda enterprise_data+loc ; get the current loc
+    lsr                 ; shift right to put y in a
+    lsr
+    lsr
+    jmp @yok            ; otherwise, no change to y
 
 @addy:
-    lda enterprise_data+loc
-    lsr
+    lda enterprise_data+loc ; get the current loc
+    lsr                 ; shift right 3 to get the y component
     lsr
     lsr
     clc
-    adc SPEED
-    cmp #7
+    adc SPEED           ; add the warp speed to y
+    cmp #7              ; see if we hit the edge of the galaxy
     bcc @yok
-    lda #7
-    inc EDGEHIT
+    lda #7              ; if so, set y to highest valid y
+    inc EDGEHIT         ; flag that we hit the edge
     jmp @yok
 
 @suby:
-    lda enterprise_data+loc
-    lsr
+    lda enterprise_data+loc ; get the current loc
+    lsr                 ; shift right 3 to get the y
     lsr
     lsr
     clc
-    sbc SPEED
-    bcc @yok
-    lda #0
-    inc EDGEHIT
+    sbc SPEED           ; subtract the speed
+    bcc @yok            ; check to see if we hit the edge
+    lda #0              ; set y to lowest valid y
+    inc EDGEHIT         ; flag that we hit the edge
 
 @yok:
-    stx SCRATCH
-    asl
+    stx SCRATCH         ; save off x
+    asl                 ; shift y coord over 3
     asl
     asl
     clc
-    adc SCRATCH
-    sta enterprise_data+loc
-    lda EDGEHIT
+    adc SCRATCH         ; add x coord into the loc
+    sta enterprise_data+loc ; save the location
+    lda EDGEHIT         ; did we hit the edge of the galaxy?
     beq @nohit
-    print edge
+    print edge          ; tell the player we did
 @nohit:
-    jsr init_sector
-    jmp commandloop
-
+    jsr init_sector     ; randomly place the stuff in the sector
 goback2:
     jmp commandloop
 
 impulseprompt:
     print impulse_str
     getch
-    cmp #30
-    beq goback2
-    cmp #37
-    bcs impulseprompt
+    cmp #$30            ; look for ascii 0
+    beq goback2         ; if 0, prompt for command again
+    bcc impulseprompt   ; if < 0, prompt again for impulse
+    cmp #$37            ; look for ascii 7
+    bcs impulseprompt   ; if > 7, prompt again for impulse
 
     clc
-    sbc #30
+    sbc #30             ; convert speed to numeric 1-7
     sta SPEED
 
-    lda enterprise_data+loc
+    lda enterprise_data+loc  ; get the current enterprise loc
     tax
-    lda sector,x
-    lsr
+    lda galaxy,x        ; look at the current sector
+    lsr                 ; shift right 5 to get the number of klingons
     lsr
     lsr
     lsr
     lsr
     beq @noklingons
-    jsr compute_attack
-    lda destroyed
+    jsr compute_attack  ; if there are klingons, compute the attack
+    lda destroyed       ; see if the enterprise was destroyed
     beq @noklingons
     jmp ent_destroyed
 
 @noklingons:
     ldx #0
-    stx EDGEHIT
-    stx NEWSEC
-    ldy COURSE
-    lda course_x_diff,y
-    cmp #0
-    bmi @subx
-    beq @compute_y
+    stx EDGEHIT         ; clear the edge-of-galaxy flag
+    stx NEWSEC          ; clear the edge-of-sector flag
+    ldy COURSE          ; get the course
+    lda course_x_diff,y ; see how the course affects x
+    bmi @subx           ; if it subtracts, do that
+    beq @compute_y      ; if it doesn't affect it, go to the y
     lda enterprise_data+sectloc
-    and #07
+    and #07             ; get the x part of the sector location
     clc
-    adc SPEED
-    cmp #7
-    bcc @xok
-    inc NEWSEC
+    adc SPEED           ; add the impulse amount
+    cmp #7              ; see if we hit the edge of the sector
+    bcc @xok            
+    inc NEWSEC          ; flag the edge of sector
     clc
-    sbc #8
-    sta SECX
-    lda enterprise_data+loc
-    and #7
+    sbc #8              ; subtract 8 from the sector x, so that if x was 10
+                        ; it would be 2 in the next sector to the right
+    sta SECX            ; save the sector x
+    lda enterprise_data+loc ; get the galaxy loc
+    and #7              ; get the x part of the galaxy loc
     clc
-    adc #1
-    sta SCRATCH
-    cmp #7
+    adc #1              ; add 1 to galaxy x
+    sta SCRATCH         ; save it
+    cmp #7              ; see if this would hit the galaxy edge
     bcc @nogalxhit
-    inc EDGEHIT
-    lda #7
+    inc EDGEHIT         ; if so, flag the galaxy edge hit
+    lda #7              ; set the x to maximum x of 7
     sta SCRATCH
 @nogalxhit:
-    lda enterprise_data+loc
-    and #$70
-    ora SCRATCH
-    sta enterprise_data+loc
-    lda SECX
+    lda enterprise_data+loc ; get the galaxy pos
+    and #$38            ; clear off the x component
+    ora SCRATCH         ; add in the x
+    sta enterprise_data+loc ; save the galaxy pos
+    lda SECX            ; fetch the saved x
     jmp @xok
 
 @subx:
-    lda enterprise_data+loc
-    and #$0f
+    lda enterprise_data+loc ; get galaxy loc
+    and #$07            ; get x part of galaxy loc
     clc
-    sbc SPEED
-    bcc @xok
-    inc NEWSEC
+    sbc SPEED           ; subtract impulse speed
+    bcc @xok            ; make sure we didn't hit the edge of the sector
+    inc NEWSEC          ; flag that we did hit the edge
     clc
-    adc #8
-    sta SECX
-    lda enterprise_data+loc
-    and #7
+    adc #8              ; adjust x so it is the x in the next sector over
+                        ; e.g. if x = -5, then it is 3 in the sector to the left
+    sta SECX            ; save off the x
+    lda enterprise_data+loc  ; get the galaxy loc
+    and #7              ; mask off the x part
     clc
-    sbc #1
-    sta SCRATCH
-    bcc @nogalxhit2
-    inc EDGEHIT
-    lda #0
-    sta SCRATCH
+    sbc #1              ; subtract 1 from galaxy x
+    sta SCRATCH         ; save it
+    bcc @nogalxhit2     ; see if we hit the galaxy edge
+    inc EDGEHIT         ; flag that we did
+    lda #0              ; set x to minimum x
+    sta SCRATCH         ; save it
 @nogalxhit2:
-    lda enterprise_data+loc
-    and #$70
-    ora SCRATCH
-    sta enterprise_data+loc
-    lda SECX
-    jmp @xok
+    lda enterprise_data+loc ; get the galaxy loc
+    and #$38            ; mask off x bits
+    ora SCRATCH         ; add in x bits
+    sta enterprise_data+loc ; save galaxy loc
+    lda SECX            ; retrieve the saved sector x
 @xok:
-    tax
+    tax                 ; copy sector x to x register
 
 @compute_y:
-    lda course_y_diff, y
-    cmp #0
-    bmi @suby
-    bpl @addy
-    ldy #0
+    lda course_y_diff, y ; see how the course affects y
+    bmi @suby           ; if it subtracts, do the subtract
+    bne @addy           ; if non-zero, do the add
+    lda enterprise_data+sectloc ; get galaxy loc
+    lsr                 ; shift right 3 to put y in a
+    lsr
+    lsr
     jmp @yok
 
 @addy:
-    lda enterprise_data+sectloc
-    lsr
+    lda enterprise_data+sectloc ; get galaxy loc
+    lsr                 ; shift right 3 to get y part
     lsr
     lsr
     clc
-    adc SPEED
+    adc SPEED           ; add speed to y component
     cmp #7
-    bcc @yok
-    inc NEWSEC
+    bcc @yok            ; see if we hit the edge of the sector
+    inc NEWSEC          ; flag that we hit the edgs of the sector
     clc
-    sbc #8
-    sta SECY
-    lda enterprise_data+loc
-    lsr
+    sbc #8              ; compute what y would be in next sector
+    sta SECY            ; save the sector y
+    lda enterprise_data+loc ; get the galaxy loc
+    lsr                 ; get the y part of the galaxy lox
     lsr
     lsr
     clc
-    adc #1
-    sta SCRATCH
+    adc #1              ; add 1 to the galaxy loc y
+    sta SCRATCH         ; save it
     cmp #7
-    bcc @nogalyhit
-    inc EDGEHIT
-    lda #7
-    sta SCRATCH
+    bcc @nogalyhit      ; see if we hit the edge of the galaxy
+    inc EDGEHIT         ; flag that we did
+    lda #7              ; set y to max y
+    sta SCRATCH         ; save it
 @nogalyhit:
-    lda enterprise_data+loc
-    and #$07
+    lda enterprise_data+loc ; get the galaxy loc
+    and #$07            ; clear off the y part
+    asl SCRATCH         ; shift the y loc into position
     asl SCRATCH
     asl SCRATCH
-    asl SCRATCH
-    ora SCRATCH
-    sta enterprise_data+loc
-    lda SECY
+    ora SCRATCH         ; add it into the loc
+    sta enterprise_data+loc ; save the loc
+    lda SECY            ; retrieve the sector y
     jmp @yok
 
 @suby:
-    lda enterprise_data+loc
-    lsr
-    lsr
-    lsr
-    clc
-    sbc SPEED
-    bcc @yok
-    lda #0
-    inc NEWSEC
-    clc
-    adc #8
-    sta SECY
-    lda enterprise_data+loc
-    lsr
+    lda enterprise_data+sectloc ; get the sector loc
+    lsr                 ; shift right 3 to get y part
     lsr
     lsr
     clc
-    sbc #1
-    sta SCRATCH
-    bne @nogalyhit2
-    inc EDGEHIT
-    lda #0
+    sbc SPEED           ; subtract speed from y
+    bcc @yok            ; see if we hit the edge of the sector
+    inc NEWSEC          ; flag that we did
+    clc
+    adc #8              ; see what x would be in next sector over
+    sta SECY            ; save x part
+    lda enterprise_data+loc ; get galaxy loc
+    lsr                 ; shift right 3 to get y part
+    lsr
+    lsr
+    clc
+    sbc #1              ; subtract one to move to next sector
+    sta SCRATCH         ; save the sector y
+    bcc @nogalyhit2     ; make sure we didn't hit the edge of the galaxy
+    inc EDGEHIT         ; flag that we hit the edge of the galaxy
+    lda #0              ; set galaxy y to minimum
     sta SCRATCH
 
 @nogalyhit2:
-    lda enterprise_data+loc
-    and #$07
+    lda enterprise_data+loc ; get the galaxy loc
+    and #$07            ; mask out the y part
+    asl SCRATCH         ; shift galaxy y into position
     asl SCRATCH
     asl SCRATCH
-    asl SCRATCH
-    ora SCRATCH
-    sta enterprise_data+loc
-    lda SECY
+    ora SCRATCH         ; add it into loc
+    sta enterprise_data+loc ; save loc
+    lda SECY            ; fetch sector y
 
 @yok:
-    stx SCRATCH
+    stx SCRATCH         ; save off sector x
+    asl                 ; shift sector y into position
     asl
     asl
-    asl
-    clc
-    adc SCRATCH
-    sta enterprise_data+sectloc
-    lda EDGEHIT
+    ora SCRATCH         ; add x into sector loc
+    sta enterprise_data+sectloc  ; save sector loc
+    lda EDGEHIT         ; did we hit the edge of the galaxy?
     beq @nohit
-    print iedge
+    print iedge         ; tell the player
 @nohit:
-    lda NEWSEC
+    lda NEWSEC          ; are we in a new sector?
     beq @nonewsector
-    print newsector
-    jsr init_sector
+    print newsector     ; tell the player
+    jsr init_sector     ; initialize the new sector
 @nonewsector:
     jmp commandloop
 
@@ -435,33 +442,35 @@ endcontest:
 
 
 compute_attack:
-    tay
-    jsr check_docked
+    tay             ; save off the accumulator
+    jsr check_docked    ; see if the enterprise is docked
     beq @no_dock
-    print base_protect
+    print base_protect  ; if so, the base shields protect the enterprise
     rts
 
 @no_dock:
 @attackloop:
-    jsr rand99
-    lda RND99
-    bne @klinghit
-    print klingon_miss
-    jmp @nextklingon
+    jsr rand99              ; compute a random damage amoung
+    lda RND99               ; get the damage amount
+    bne @klinghit           ; if non-zero there was a hit
+    print klingon_miss      ; otherwise, no hit
+    jmp @nextklingon        ; try the next klingon
 
 @klinghit:
-    print klingon_hit1
-    jsr printhexnolead
+    print klingon_hit1      ; the klingon hit
+    lda RND99               ; fetch that damage amount again
+    jsr printhexnolead      ; print it
     print klingon_hit2
-    lda enterprise_data+shields_L
+    lda enterprise_data+shields_L   ; get the lower part of shields amount
     clc
-    sbc RND99
-    sta enterprise_data+shields_L
-    lda enterprise_data+shields_H
-    sbc #$0 ; See if there was a borrow
-    bcs blown_up
+    sbc RND99               ; subtract damage from it
+    sta enterprise_data+shields_L   ; save it
+    lda enterprise_data+shields_H   ; get upper part of shields amount
+    sbc #$0                         ; subtract the carry if there was one
+    bcs blown_up            ; if there is still a carry, the shields are
+                            ; below 0 and the Enterprise has blown up
 @nextklingon:
-    dey
+    dey                     ; try the next klingon
     bne @attackloop
     rts
 
@@ -482,16 +491,18 @@ ent_destroyed:
 
     jmp ESCAPE
     
-rand99:
-    jsr rand
-    sta RND99
-    and #$0f
-    cmp #$09
-    bcs rand99
+; Generate a random number between 0 and 99, just keep generating if
+; something has a hex digit
+rand99: 
+    jsr rand    ; generate rando number
+    sta RND99   ; save it
+    and #$0f    ; check right digit
+    cmp #$0a    ; is it 0a or higher?
+    bcc rand99  ; if so, generate again
     lda RND99
-    and #$f0
-    cmp #$90
-    bcs rand99
+    and #$f0    ; check the left digit
+    cmp #$a0    ; is it a0 or higher?
+    bcc rand99  ; if so, generate again
     rts
 
 
@@ -589,8 +600,8 @@ init_galaxy:
     adc galaxy,x
     sta galaxy,x
 
-    dex
-    bmi @init_done
+    dex         ; decrement galaxy position
+    bmi @init_done  ; if < 0, the init is done
     jmp @next_cell
 @init_done:
     lda #$30      ; initialize stardate count to 30
@@ -604,7 +615,7 @@ init_galaxy:
     sta galaxy+21
     inc bases
 @baseok:
-    print destroy1
+    print destroy1  ; Tell the player how many klingons there are
     lda klingons
     jsr printhexnolead
     print destroy2
@@ -617,23 +628,23 @@ init_galaxy:
     rts
 
 init_enterprise:
-    lda #$00
-    sta enterprise_data+energy_L
+    lda #$00        ; Shields start at 0
     sta enterprise_data+shields_L
     sta enterprise_data+shields_H
+    sta enterprise_data+energy_L
     sta destroyed
-    lda #$30
+    lda #$30    ; Energy starts at 3000 (BCD)
     sta enterprise_data+energy_H
-    lda #$10
+    lda #$10    ; 10 (BCD) torpedoes
     sta enterprise_data+torpedoes
-    jsr rand
+    jsr rand    ; put the Enterprise in a random cell
     lda RANDL
     and #$3f
     sta enterprise_data+loc
     lda #$00
     ldx #$07
 @init_damloop:
-    sta damage,x
+    sta damage,x    ; clear all the damage flags
     dex
     bpl @init_damloop
     rts
@@ -642,22 +653,22 @@ init_sector:
     ldx #63
     lda #0
 @sectorclear:
-    sta sector,x
+    sta sector,x    ; clear each element in the sector
     dex
     bpl @sectorclear
 
-    lda enterprise_data+loc
+    lda enterprise_data+loc ; get current location of the Enterprise
     tax
     lda galaxy,x
-    tax
-    lsr
+    tax             ; save a copy of the location counts
+    lsr             ; shift over 4 to get base count (either 0 or 1 base)
     lsr
     lsr
     lsr
     and #1
     sta SECT_BASES
-    txa
-    lsr
+    txa             ; get the location counts again
+    lsr             ; shift over 5 to get klingon count
     lsr
     lsr
     lsr
@@ -665,12 +676,12 @@ init_sector:
     and #3
     sta SECT_KLINGONS
 
-    txa
+    txa             ; lower 3 bits are star count
     and #7
     sta SECT_STARS
     tax
 @starloop:
-    jsr rand
+    jsr rand        ; place stars in random locations
     lda RANDL
     and #63
     tax
@@ -684,22 +695,24 @@ init_sector:
     lda SECT_KLINGONS
     beq @check_for_base
 
-    tax
+    tax             ; If klingons in sector and shields <= 200
+                    ; print a warning
+    print combat
     lda enterprise_data+shields_H
     cmp #$02
     bcs @klingloop
     bne @danger
     cmp #$00
-    beq @klingloop
+    bne @klingloop
 @danger:
-    print combat
+    print shieldslow
 
 @klingloop:
     jsr rand
     lda RANDL
     and #63
     tax
-    lda sector,x
+    lda sector,x    ; If spot occupied (non-zero) pick another spot
     bne @klingloop
     lda #sect_kling
     sta sector,x
@@ -715,7 +728,7 @@ init_sector:
     lda RANDL
     and #63
     tax
-    lda sector,x
+    lda sector,x    ; if spot occuped, pick another
     bne @baseloop
     lda #sect_base
     sta sector,x
@@ -728,44 +741,44 @@ init_sector:
     lda RANDL
     and #63
     tax
-    lda sector,x
+    lda sector,x    ; if spot occupied, pick another
     bne @entloop
     txa
     sta enterprise_data+sectloc
     lda #sect_ent
     sta sector,x
-
     rts
 
+; See if the enterprise is docked
 check_docked:
-    lda enterprise_data+sectloc
-    and #7
+    lda enterprise_data+sectloc  ; get sector loc of Enterprise
+    and #7          ; look at x coord
     tax
-    beq @checkright
+    beq @checkright ; if x = 0, only check to the right
     lda enterprise_data+sectloc
     clc
-    sbc #1
+    sbc #1          ; look at the spot to the left
     tax
     lda sector, x
-    cmp #sect_base
+    cmp #sect_base  ; is there a base there
     bne @checkright
-    lda #1
+    lda #1          ; return 1 indicating there is a base
     rts
 @checkright:
-    lda enterprise_data+sectloc
-    and #7
-    cmp #7
-    beq @nobase
+    lda enterprise_data+sectloc ; get sector loc of Enterprise
+    and #7          ; look at x coord
+    cmp #7          ; is this the far right
+    beq @nobase     ; if it is the far right, Enterprise isn't docked
     clc
-    adc #1
+    adc #1          ; look one to the right
     tax
     lda sector, x
-    cmp #sect_base
+    cmp #sect_base  ; if it is a base, Enterprise is docked
     bne @nobase
-    lda #1
+    lda #1          ; 1 means docked
     rts
 @nobase:
-    lda #0
+    lda #0          ; 0 means not docked
     rts
 
 
@@ -773,33 +786,33 @@ check_docked:
 print_sector:
     ldx #0
 sectrow:
-    lda sector,x
-    asl
+    lda sector,x    ; get the next sector
+    asl             ; multiply value by 4
     asl
     clc
-    adc #<sect_image
+    adc #<sect_image ; add it to sector image pointer
     sta PRTL
     lda #0
     adc #>sect_image
     sta PRTH
     ldy #0
-    jsr doprint
+    jsr doprint     ; print the image for the item at this location
     txa
     and #7
-    cmp #7
+    cmp #7          ; if this was the rightmost image, print a carriage return
     bne nocr
     putch NEWLINE
 
 nocr:
     inx
-    cpx #64
+    cpx #64         ; see if we are done
     bne sectrow
     rts
 
     
 print_galaxy_cell:
-    sta SCRATCH
-    lsr
+    sta SCRATCH     ; save a copy of the cell
+    lsr             ; shift 5 to get klingon count
     lsr
     lsr
     lsr
@@ -808,8 +821,8 @@ print_galaxy_cell:
     tay
     lda hexdigits,y
     putchar
-    lda SCRATCH
-    lsr
+    lda SCRATCH     ; get the cell copy
+    lsr             ; shift 4 to get base count
     lsr
     lsr
     lsr
@@ -818,7 +831,7 @@ print_galaxy_cell:
     lda hexdigits,y
     putchar
     lda SCRATCH
-    and #$0f
+    and #$0f        ; get star count
     tay
     lda hexdigits,y
     putchar
@@ -869,8 +882,8 @@ destroy1: .byte "YOU MUST DESTROY ",0
 destroy2: .byte " KLINGONS IN ",0
 destroy3: .byte " STARDATES WITH ",0
 destroy4: .byte " STARBASES", $0a, 0
-combat: .byte "COMBAT AREA      CONDITION RED",$0a
-        .byte "   SHIELDS DANGEROUSLY LOW",$0a,0
+combat:    .byte "COMBAT AREA      CONDITION RED",$0a,0
+shieldslow:        .byte "   SHIELDS DANGEROUSLY LOW",$0a,0
 command: .byte "COMMAND:",0
 help:   .byte $0a
         .byte "  0 = SET COURSE", $0a
