@@ -58,6 +58,22 @@ seconddigit:
     putchar
     rts
 
+printhex4nolead:
+    lda PRTH
+    cmp #0
+    beq @nofirst
+    jsr printhexnolead
+    cmp #$10
+    bcc @nofirst
+    lda PRTL
+    jsr printhex
+    rts
+
+@nofirst:
+    lda PRTL
+    jsr printhexnolead
+    rts
+
 initrand:
     ldx #$65
     stx RANDL
@@ -84,6 +100,6 @@ iszero:
     rts
 
 .export doprint, printhex, printhexnolead, putcharn
-.export initrand, rand, hexdigits
+.export initrand, rand, hexdigits, printhex4nolead
 
 hexdigits: .byte "0123456789ABCDEF"

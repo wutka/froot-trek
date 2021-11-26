@@ -4,6 +4,7 @@ DASH .set $2d
 PIPE .set $7c
 NEWLINE .set $0d
 COMMA .set $2c
+SPACE .set $20
 
 SCRATCH .set $20
 SECT_STARS    .set $21
@@ -19,6 +20,16 @@ NEWSEC .set 28
 SECX   .set 29
 SECY   .set 30
 
+NUMINPUTL .set 31
+NUMINPUTH .set 32
+NUMINPUTCOUNT .set 33
+NUMINPUTDIGIT .set 34
+
+CMP1L .set 35
+CMP1H .set 36
+CMP2L .set 37
+CMP2H .set 38
+
 .macro putch ch
     lda #ch
     putchar
@@ -27,6 +38,7 @@ SECY   .set 30
 ESCAPE .set $FF1A
 
     .import initrand, rand, printhexnolead, putcharn, doprint, hexdigits
+    .import printhex,printhex4nolead
 
     .include "lib.inc"
 
@@ -39,6 +51,23 @@ mainloop:
 
 commandloop:
     jsr print_location
+    print energy_hdr
+    lda enterprise_data+energy_H
+    sta PRTH
+    lda enterprise_data+energy_L
+    sta PRTL
+    jsr printhex4nolead
+    print shields_hdr
+    lda enterprise_data+shields_H
+    sta PRTH
+    lda enterprise_data+shields_L
+    sta PRTL
+    jsr printhex4nolead
+    print torps_hdr
+    lda enterprise_data+torpedoes
+    jsr printhexnolead
+    putch NEWLINE
+
     print command
     getch
     and #$7f
@@ -91,7 +120,7 @@ setcourse:
     bcc invalid_course  ; if < 0, invalid
     cmp #$38
     bcs invalid_course  ; if > 8, invalid
-    clc
+    sec
     sbc #$31 ; convert ASCII 1-8 to 0-7
     sta COURSE
     jmp warporimpulse
@@ -123,10 +152,10 @@ warpprompt:
     cmp #$30        ; compare char to ascii 0
     beq goback1     ; if = 0, go back to command prompt
     bcc warpprompt  ; if < 0, prompt again for warp
-    cmp #$37        ; compare char to ascii 7
+    cmp #$38        ; compare char to ascii 7
     bcs warpprompt  ; if > 7, prompt again for warp
 
-    clc
+    sec
     sbc #$30     ; convert ASCII to number 1-7
     sta SPEED
 
@@ -170,9 +199,9 @@ warpprompt:
 @subx:
     lda enterprise_data+loc
     and #07             ; mask out the y
-    clc
+    sec
     sbc SPEED           ; subtract the speed from x
-    bcc @xok            ; see if we hit the edge of the galaxy
+    bcs @xok            ; see if we hit the edge of the galaxy
     inc EDGEHIT         ; flag that the edge was hit
     lda #0              ; set x to leftmost edge
 @xok:
@@ -206,9 +235,9 @@ warpprompt:
     lsr                 ; shift right 3 to get the y
     lsr
     lsr
-    clc
+    sec
     sbc SPEED           ; subtract the speed
-    bcc @yok            ; check to see if we hit the edge
+    bcs @yok            ; check to see if we hit the edge
     lda #0              ; set y to lowest valid y
     inc EDGEHIT         ; flag that we hit the edge
 
@@ -234,10 +263,10 @@ impulseprompt:
     cmp #$30            ; look for ascii 0
     beq goback2         ; if 0, prompt for command again
     bcc impulseprompt   ; if < 0, prompt again for impulse
-    cmp #$37            ; look for ascii 7
+    cmp #$38            ; look for ascii 7
     bcs impulseprompt   ; if > 7, prompt again for impulse
 
-    clc
+    sec
     sbc #$30             ; convert speed to numeric 1-7
     sta SPEED
 
@@ -256,21 +285,30 @@ impulseprompt:
     jmp ent_destroyed
 
 @noklingons:
+    lda enterprise_data+sectloc
+    tax
+    lda #0
+    sta sector,x        ; clear out the old enterprise location
     ldx #0
     stx EDGEHIT         ; clear the edge-of-galaxy flag
     stx NEWSEC          ; clear the edge-of-sector flag
     ldy COURSE          ; get the course
     lda course_x_diff,y ; see how the course affects x
     bmi @subx           ; if it subtracts, do that
-    beq @compute_y      ; if it doesn't affect it, go to the y
+    bne @addx      ; if it doesn't affect it, go to the y
+    lda enterprise_data+sectloc
+    and #07
+    tax
+    jmp @compute_y
+@addx:
     lda enterprise_data+sectloc
     and #07             ; get the x part of the sector location
     clc
     adc SPEED           ; add the impulse amount
-    cmp #7              ; see if we hit the edge of the sector
+    cmp #8              ; see if we hit the edge of the sector
     bcc @xok            
     inc NEWSEC          ; flag the edge of sector
-    clc
+    sec
     sbc #8              ; subtract 8 from the sector x, so that if x was 10
                         ; it would be 2 in the next sector to the right
     sta SECX            ; save the sector x
@@ -279,7 +317,7 @@ impulseprompt:
     clc
     adc #1              ; add 1 to galaxy x
     sta SCRATCH         ; save it
-    cmp #7              ; see if this would hit the galaxy edge
+    cmp #8              ; see if this would hit the galaxy edge
     bcc @nogalxhit
     inc EDGEHIT         ; if so, flag the galaxy edge hit
     lda #7              ; set the x to maximum x of 7
@@ -293,22 +331,23 @@ impulseprompt:
     jmp @xok
 
 @subx:
-    lda enterprise_data+loc ; get galaxy loc
+    lda enterprise_data+sectloc ; get galaxy loc
     and #$07            ; get x part of galaxy loc
-    clc
+    sec
     sbc SPEED           ; subtract impulse speed
-    bcc @xok            ; make sure we didn't hit the edge of the sector
+    bcs @xok            ; make sure we didn't hit the edge of the sector
     inc NEWSEC          ; flag that we did hit the edge
     clc
     adc #8              ; adjust x so it is the x in the next sector over
                         ; e.g. if x = -5, then it is 3 in the sector to the left
+    and #7
     sta SECX            ; save off the x
     lda enterprise_data+loc  ; get the galaxy loc
     and #7              ; mask off the x part
-    clc
+    sec
     sbc #1              ; subtract 1 from galaxy x
     sta SCRATCH         ; save it
-    bcc @nogalxhit2     ; see if we hit the galaxy edge
+    bcs @nogalxhit2     ; see if we hit the galaxy edge
     inc EDGEHIT         ; flag that we did
     lda #0              ; set x to minimum x
     sta SCRATCH         ; save it
@@ -341,8 +380,9 @@ impulseprompt:
     cmp #7
     bcc @yok            ; see if we hit the edge of the sector
     inc NEWSEC          ; flag that we hit the edgs of the sector
-    clc
+    sec
     sbc #8              ; compute what y would be in next sector
+    and #7
     sta SECY            ; save the sector y
     lda enterprise_data+loc ; get the galaxy loc
     lsr                 ; get the y part of the galaxy lox
@@ -372,21 +412,22 @@ impulseprompt:
     lsr                 ; shift right 3 to get y part
     lsr
     lsr
-    clc
+    sec
     sbc SPEED           ; subtract speed from y
-    bcc @yok            ; see if we hit the edge of the sector
+    bcs @yok            ; see if we hit the edge of the sector
     inc NEWSEC          ; flag that we did
     clc
     adc #8              ; see what x would be in next sector over
+    and #7
     sta SECY            ; save x part
     lda enterprise_data+loc ; get galaxy loc
     lsr                 ; shift right 3 to get y part
     lsr
     lsr
-    clc
+    sec
     sbc #1              ; subtract one to move to next sector
     sta SCRATCH         ; save the sector y
-    bcc @nogalyhit2     ; make sure we didn't hit the edge of the galaxy
+    bcs @nogalyhit2     ; make sure we didn't hit the edge of the galaxy
     inc EDGEHIT         ; flag that we hit the edge of the galaxy
     lda #0              ; set galaxy y to minimum
     sta SCRATCH
@@ -408,6 +449,9 @@ impulseprompt:
     asl
     ora SCRATCH         ; add x into sector loc
     sta enterprise_data+sectloc  ; save sector loc
+    tax
+    lda #sect_ent
+    sta sector,x
     lda EDGEHIT         ; did we hit the edge of the galaxy?
     beq @nohit
     print iedge         ; tell the player
@@ -420,6 +464,7 @@ impulseprompt:
     jmp commandloop
 
 srs:
+    putch NEWLINE
     jsr print_sector
     jmp commandloop
 
@@ -428,13 +473,13 @@ lrs:
     print row_sep
 
     lda enterprise_data+loc
-    and #38             ; mask out y
+    and #$38             ; mask out y
     bne print_first_row
     print blank_row
     jmp print_middle_row
 print_first_row:
     lda enterprise_data+loc
-    clc
+    sec
     sbc #8
     jsr print_row
 
@@ -446,8 +491,8 @@ print_middle_row:
     print row_sep
 
     lda enterprise_data+loc
-    and #38
-    cmp #38
+    and #$38
+    cmp #$38
     bne print_third_row
     print blank_row
     print row_sep
@@ -470,13 +515,12 @@ print_row:
 print_first_cell:
     print cell_header
     txa
-    clc
+    sec
     sbc #1
     tay
     lda galaxy,y
     jsr print_galaxy_cell
-    lda #32
-    putchar
+    putch SPACE
 
 print_second_cell:
     txa
@@ -484,8 +528,7 @@ print_second_cell:
     print cell_header
     lda galaxy,y
     jsr print_galaxy_cell
-    lda #32
-    putchar
+    putch SPACE
 
     txa
     and #7
@@ -502,8 +545,7 @@ print_third_cell:
     tay
     lda galaxy,y
     jsr print_galaxy_cell
-    lda #32
-    putchar
+    putch SPACE
 
 print_cell_end:
     print cell_line_end
@@ -514,8 +556,7 @@ print_location:
     lda enterprise_data+sectloc
     and #7
     jsr printhexnolead
-    lda #COMMA
-    putchar
+    putch COMMA
     lda enterprise_data+sectloc
     lsr
     lsr
@@ -525,15 +566,13 @@ print_location:
     lda enterprise_data+loc
     and #7
     jsr printhexnolead
-    lda #COMMA
-    putchar
+    putch COMMA
     lda enterprise_data+loc
     lsr
     lsr
     lsr
     jsr printhexnolead
-    lda #NEWLINE
-    putchar
+    putch NEWLINE
     rts
 
 
@@ -545,6 +584,69 @@ firetorps:
     jmp commandloop
 
 shieldcontrol:
+    print shields_prompt
+    jsr num_input
+
+    lda enterprise_data+energy_L
+    sta CMP1L
+    lda enterprise_data+energy_H
+    sta CMP1H
+
+    lda NUMINPUTL
+    sta CMP2L
+    lda NUMINPUTH
+    sta CMP2H
+
+    jsr compare_bcd4
+    beq @xferok
+    bcs @xferok
+
+    print notenergyshields
+    jmp commandloop
+
+@xferok:
+    lda enterprise_data+energy_L
+    sed
+    sec
+    sbc NUMINPUTL
+    sta enterprise_data+energy_L
+    lda enterprise_data+energy_H
+    sbc NUMINPUTH
+    sta enterprise_data+energy_H
+
+    print xferring
+    lda NUMINPUTH
+    sta PRTH
+    lda NUMINPUTL
+    sta PRTL
+    jsr printhex4nolead
+    print unitstoshields
+
+    lda enterprise_data+shields_L
+    clc
+    adc NUMINPUTL
+    sta enterprise_data+shields_L
+    lda enterprise_data+shields_H
+    adc NUMINPUTH
+    sta enterprise_data+shields_H
+    cld
+    cmp #$10
+    beq @check_second_digit
+    bcs @shield_overflow
+    jmp commandloop
+
+@check_second_digit:
+    lda enterprise_data+shields_L
+    cmp #00
+    bne @shield_overflow
+    jmp commandloop
+
+@shield_overflow:
+    print toomuchenergy
+    lda #00
+    sta enterprise_data+shields_L
+    lda #$10
+    sta enterprise_data+shields_H
     jmp commandloop
 
 damagecontrol:
@@ -558,7 +660,7 @@ endcontest:
 
 
 compute_attack:
-    tay             ; save off the accumulator
+    sta SCRATCH         ; save off the accumulator
     jsr check_docked    ; see if the enterprise is docked
     beq @no_dock
     print base_protect  ; if so, the base shields protect the enterprise
@@ -578,15 +680,15 @@ compute_attack:
     jsr printhexnolead      ; print it
     print klingon_hit2
     lda enterprise_data+shields_L   ; get the lower part of shields amount
-    clc
+    sec
     sbc RND99               ; subtract damage from it
     sta enterprise_data+shields_L   ; save it
     lda enterprise_data+shields_H   ; get upper part of shields amount
     sbc #$0                         ; subtract the carry if there was one
-    bcs blown_up            ; if there is still a carry, the shields are
+    bcc blown_up            ; if there is still a carry, the shields are
                             ; below 0 and the Enterprise has blown up
 @nextklingon:
-    dey                     ; try the next klingon
+    dec SCRATCH             ; try the next klingon
     bne @attackloop
     rts
 
@@ -611,14 +713,15 @@ ent_destroyed:
 ; something has a hex digit
 rand99: 
     jsr rand    ; generate rando number
+    lda RANDL
     sta RND99   ; save it
     and #$0f    ; check right digit
     cmp #$0a    ; is it 0a or higher?
-    bcc rand99  ; if so, generate again
+    bcs rand99  ; if so, generate again
     lda RND99
     and #$f0    ; check the left digit
     cmp #$a0    ; is it a0 or higher?
-    bcc rand99  ; if so, generate again
+    bcs rand99  ; if so, generate again
     rts
 
 
@@ -757,6 +860,10 @@ init_enterprise:
     lda RANDL
     and #$3f
     sta enterprise_data+loc
+    jsr rand
+    lda RANDL
+    and #$3f
+    sta enterprise_data+sectloc
     lda #$00
     ldx #$07
 @init_damloop:
@@ -796,6 +903,12 @@ init_sector:
     and #7
     sta SECT_STARS
     tax
+
+@entloop:
+    ldx enterprise_data+sectloc
+    lda #sect_ent
+    sta sector,x
+
 @starloop:
     jsr rand        ; place stars in random locations
     lda RANDL
@@ -815,7 +928,7 @@ init_sector:
                     ; print a warning
     print combat
     lda enterprise_data+shields_H
-    cmp #$02
+    cmp #$01
     bcs @klingloop
     bne @danger
     cmp #$00
@@ -852,17 +965,6 @@ init_sector:
     bne @baseloop
 
 @basedone:
-@entloop:
-    jsr rand
-    lda RANDL
-    and #63
-    tax
-    lda sector,x    ; if spot occupied, pick another
-    bne @entloop
-    txa
-    sta enterprise_data+sectloc
-    lda #sect_ent
-    sta sector,x
     rts
 
 ; See if the enterprise is docked
@@ -872,7 +974,7 @@ check_docked:
     tax
     beq @checkright ; if x = 0, only check to the right
     lda enterprise_data+sectloc
-    clc
+    sec
     sbc #1          ; look at the spot to the left
     tax
     lda sector, x
@@ -952,6 +1054,108 @@ print_galaxy_cell:
     putchar
     rts
 
+num_input:
+    lda #0
+    sta NUMINPUTL
+    sta NUMINPUTH
+    sta NUMINPUTCOUNT
+
+read_digit:
+    getch               ; read a digit
+    cmp #13
+    bne @check_nl
+    jmp @hit_return
+
+@check_nl:
+    cmp #10
+    bne @check_bs
+
+@hit_return:
+    lda NUMINPUTCOUNT
+    beq num_input
+    rts
+
+@check_bs:
+    cmp #08             ; check for backspace
+    bne checkdigits
+    lda NUMINPUTCOUNT   ; see if we are already at the beginning
+    beq read_digit
+    putchar             ; print the backspace
+    putch SPACE
+    putch 8
+    ; right-shift the number, undoing last digit
+    lda NUMINPUTH       ; shift low digit left
+    asl
+    asl
+    asl
+    asl
+    sta SCRATCH
+    lda NUMINPUTL       ; shift high digit right
+    lsr
+    lsr
+    lsr
+    lsr
+    ora SCRATCH         ; combine H low digit with L high digit
+    sta NUMINPUTL
+    lda NUMINPUTH       ; get the high digits again
+    lsr                 ; shift upper digit to low
+    lsr
+    lsr
+    lsr
+    sta NUMINPUTH       
+    dec NUMINPUTCOUNT   ; decrement the digit input count
+    jmp read_digit     ; read the digit again
+
+checkdigits:
+    cmp #$30            ; is the char < ASCII 0?
+    bcc read_digit
+    cmp #$3a            ; is the char > ASCII 9?
+    bcs read_digit
+    putchar             ; print the backspace
+    and #$7f
+    sec
+    sbc #$30            ; convert ASCII digit to 0-9
+    sta NUMINPUTDIGIT   ; save the digit
+    lda NUMINPUTH       ; shift high digits left
+    asl
+    asl
+    asl
+    asl
+    sta SCRATCH
+    lda NUMINPUTL       ; move high digit in low byte to the right
+    lsr
+    lsr
+    lsr
+    lsr
+    ora SCRATCH         ; combine old high digit from low byte
+                        ; with old low digit in high byte
+    sta NUMINPUTH
+    lda NUMINPUTL       ; shift the low digit left
+    asl
+    asl
+    asl
+    asl
+    ora NUMINPUTDIGIT   ; add in the new digit in lowest position
+    sta NUMINPUTL
+    inc NUMINPUTCOUNT   ; increment the digit count
+    lda NUMINPUTCOUNT
+    cmp #4              ; if we have read 4 digits, quit
+    beq @done
+    jmp read_digit
+@done:
+    rts
+
+compare_bcd4:
+    lda CMP1H
+    cmp CMP2H
+    beq @compare_second
+    rts
+
+@compare_second:
+    lda CMP1L
+    cmp CMP2L
+    rts
+
 end:
     .byte 0
     
@@ -986,7 +1190,7 @@ sect_star  .set 4
 destroyed  .set sector+64
 
 sect_image:
-nothing:    .byte "   ",0
+nothing:    .byte " . ",0
 ent_ship:   .byte "-_=",0
 kling_ship: .byte "o-z",0
 starbase:   .byte ">I<",0
@@ -994,10 +1198,10 @@ star:       .byte " * ",0
 
 
 destroy1: .byte "YOU MUST DESTROY ",0
-destroy2: .byte " KLINGONS IN ",0
+destroy2: .byte " KLINGONS",$0a,"IN ",0
 destroy3: .byte " STARDATES WITH ",0
 destroy4: .byte " STARBASES", $0a, 0
-combat:    .byte "COMBAT AREA      CONDITION RED",$0a,0
+combat:    .byte $0a,"COMBAT AREA      CONDITION RED",$0a,0
 shieldslow:        .byte "   SHIELDS DANGEROUSLY LOW",$0a,0
 command: .byte "COMMAND:",0
 help:   .byte $0a
@@ -1067,7 +1271,7 @@ iedge: .byte $0a
     .byte "THE IMPULSE ENGINES SAFELY SHUTDOWN AS",$0a
     .byte "YOU ENCOUNTER THE EDGE OF THE GALAXY.",$0a,0
 
-newsector: .byte $0
+newsector: .byte $a
     .byte "YOU HAVE ENTERED A NEW SECTOR.",$0a,0
 
 klingon_hit1: .byte $0a
@@ -1083,5 +1287,16 @@ blank_cell: .byte "| --- ",0
 cell_header: .byte "| ",0
 cell_line_end: .byte "|",$0a,0
 
-coords: .byte "YOU ARE AT LOCATION ",0
+coords: .byte $0a,"YOU ARE AT LOCATION ",0
 coords2: .byte " IN SECTOR ",0
+energy_hdr: .byte "ENERGY: ",0
+shields_hdr: .byte " SHIELDS: ",0
+torps_hdr: .byte " TORPEDOES: ",0
+
+shields_prompt: .byte $0a,"AMOUNT TO TRANSFER TO SHIELDS?",0
+notenergyshields: .byte $0a,"NOT ENOUGH ENERGY AVAILABLE TO TRANSFER",$0a
+                  .byte "THAT AMOUNT TO SHIELDS.",$0a,0
+toomuchenergy: .byte $0a, "ENERGY TRANSFER EXCEEDS MAX SHIELD RATING",$0a
+               .byte "OF 1000. ADDITIONAL ENERGY IS DISSIPATED.",$0a, 0
+xferring: .byte $0a,"TRANSFERRING ",0
+unitstoshields: .byte " UNITS TO SHIELDS.",$0a,0
