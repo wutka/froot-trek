@@ -30,6 +30,12 @@ CMP1H .set 36
 CMP2L .set 37
 CMP2H .set 38
 
+DIVL .set 35
+DIVH .set 36
+
+DAML .set 35
+DAMH .set 36
+
 .macro putch ch
     lda #ch
     putchar
@@ -623,6 +629,7 @@ firephasers:
     lsr
     lsr
     lsr
+    sta SECT_KLINGONS
 
     cmp #3
     beq @divphaserby3
@@ -631,9 +638,77 @@ firephasers:
     jmp @computephaserdamage
 
 @divphaserby3:
-    
+    lda NUMINPUTH
+    sta DIVH
+    lda NUMINPUTL
+    sta DIVL
+    jsr divide3
+    lda DIVH
+    sta NUMINPUTH
+    lda DIVL
+    sta NUMINPUTL
+    jmp @computephaserdamage
 
+@divphaserby2
+    lda NUMINPUTH
+    sta DIVH
+    lda NUMINPUTL
+    sta DIVL
+    jsr divide2
+    lda DIVH
+    sta NUMINPUTH
+    lda DIVL
+    sta NUMINPUTL
+
+@computephaserdamage:
+    lda SECT_KLINGONS
+    sec
+    sbc #0
+    sta SCRATCH
+    asl
+    clc
+    adc SCRATCH
+    tax
+@klingdamloop:
+    jsr rand99
+    lda NUMINPUTL
+    sec
+    sbc RND99
+    sta DAML
+    lda NUMINPUTH
+    sbc #0
+    sta DAMH
+    bcc @klingmiss
+    print klinghit
+    lda DAMH
+    sta PRTH
+    lda DAML
+    sta PRTL
+    jsr printhex4nolead
+    print klinghitdam
+    lda klingon_data+kshields_L,x
+    sec
+    sbc DAML
+    sta klingon_data+kshields_L,x
+    lda klingon_data+kshields_H,x
+    sbc DAMH
+    sta klingon_data+kshields_H,x
+    bcc @kling_destroyed
+@nextkling:
+    dex
+    dex
+    dex
+    bpl @klingdamloop
     jmp commandloop
+
+@klingmiss:
+    print klingmiss
+    jmp nextkling
+
+@kling_destroyed:
+    print klingdestroyed
+
+
 
 firetorps:
     jmp commandloop
@@ -1211,6 +1286,97 @@ compare_bcd4:
     cmp CMP2L
     rts
 
+divide2:
+    lda DIVL
+    tax
+    lsr             ; divide by 2
+    and #$77        ; mask off upper bit of each nybble
+    sta DIVL
+    txa
+    and #$10        ; was left digit odd?
+    beq @checkupper
+    lda DIVL
+    clc
+    adc #$05        ; if left digit is odd, add 5 to lower digit
+    sta DIVL
+@checkupper:
+    lda DIVH        ; if right digit of upper byte is odd,
+    and #$01
+    beq @div2upper
+    lda DIVL
+    clc
+    adc #$50        ; add 5 to left digit of lower byte
+    sta DIVL
+@div2upper:
+    lda DIVH        ; get upper byte
+    tax
+    lsr             ; divide by 2
+    and #$77        ; mask off upper bit of each nybble
+    sta DIVH
+    txa
+    and #$10        ; was left digit odd?
+    beq @divdone
+    lda DIVH
+    clc
+    adc #$05
+    sta DIVH
+@divdone:
+    rts
+
+    
+divide3:
+    lda DIVH           ; get first two digits
+    lsr                 ; shift digit 1 to be rightmost
+    lsr
+    lsr
+    lsr
+    tax                 ; move to index register
+    lda div3,x          ; find a div 3
+    asl                 ; shift back over into left position
+    asl
+    asl
+    asl
+    sta SCRATCH         ; save it off
+    lda rem3,x          ; find a rem 3
+    tax                 ; copy it to index reg
+    lda DIVH           ; get second digit
+    and #$0f
+    clc
+    adc tens,x          ; add the table offset
+    tax
+    lda div3,x          ; find a div 3
+    ora SCRATCH         ; add in the first digit
+    sta DIVH           ; save result
+    lda rem3,x          ; find a rem 3
+    tax
+    lda tens,x          ; get index into table
+    sta SCRATCH         ; save it
+    lda DIVL           ; get 3rd & 4th rights
+    lsr                 ; shift off 4th digit
+    lsr
+    lsr
+    lsr
+    clc
+    adc SCRATCH         ; get index into table
+    tax
+    lda div3,x          ; get a div 3
+    asl                 ; shift it to leftmost byte
+    asl
+    asl
+    asl
+    sta SCRATCH         ; save it
+    lda rem3,x          ; get a rem 3
+    tax
+    lda DIVL           ; get 4th digit
+    and #$0f
+    clc
+    adc tens,x          ; compute index into table
+    tax
+    lda div3,x          ; get a div 3
+    ora SCRATCH         ; add in 3rd digit
+    sta DIVL           ; save digits
+    rts
+    
 end:
     .byte 0
     
@@ -1361,6 +1527,12 @@ notenergyphasers: .byte $0a,"NOT ENOUGH ENERGY AVAILABLE TO TRANSFER",$0a
                   .byte "THAT AMOUNT TO PHASERS.",$0a,0
 firing: .byte $0a,"FIRING ",0
 unitsofphasers: .byte " UNITS OF PHASERS.",$0a,0
+
+klinghit: .byte $0a,"KLINGON HIT WITH ",0
+klinghitdam: .byte " STROMS.",$0a,0
+
+klingmiss: .byte $0a,"PHASER BLAST MISSES KLINGON.",$0a,0
+klingdestroyed: .byte "KLINGON BATTLECRUISER DESTROYED.",$0a,0
 
 tens:  .byte 0, 10, 20
 div3: .byte 0, 0, 0, 1, 1, 1, 2, 2, 2, 3
