@@ -578,6 +578,61 @@ print_location:
 
 
 firephasers:
+    print phasers_prompt
+    jsr num_input
+
+    lda enterprise_data+energy_L
+    sta CMP1L
+    lda enterprise_data+energy_H
+    sta CMP1H
+
+    lda NUMINPUTL
+    sta CMP2L
+    lda NUMINPUTH
+    sta CMP2H
+
+    jsr compare_bcd4
+    beq @phasok
+    bcs @phasok
+
+    print notenergyphasers
+    jmp commandloop
+
+@phasok:
+    lda enterprise_data+energy_L
+    sed
+    sec
+    sbc NUMINPUTL
+    sta enterprise_data+energy_L
+    lda enterprise_data+energy_H
+    sbc NUMINPUTH
+    sta enterprise_data+energy_H
+
+    print firing
+    lda NUMINPUTH
+    sta PRTH
+    lda NUMINPUTL
+    sta PRTL
+    jsr printhex4nolead
+    print unitsofphasers
+
+    ldx enterprise_data+loc
+    lda galaxy,x
+    lsr             ; get number of klingons
+    lsr
+    lsr
+    lsr
+    lsr
+
+    cmp #3
+    beq @divphaserby3
+    cmp #2
+    beq @divphaserby2
+    jmp @computephaserdamage
+
+@divphaserby3:
+    
+
     jmp commandloop
 
 firetorps:
@@ -1300,3 +1355,17 @@ toomuchenergy: .byte $0a, "ENERGY TRANSFER EXCEEDS MAX SHIELD RATING",$0a
                .byte "OF 1000. ADDITIONAL ENERGY IS DISSIPATED.",$0a, 0
 xferring: .byte $0a,"TRANSFERRING ",0
 unitstoshields: .byte " UNITS TO SHIELDS.",$0a,0
+
+phasers_prompt: .byte $0a,"AMOUNT OF PHASER ENERGY TO FIRE?",0
+notenergyphasers: .byte $0a,"NOT ENOUGH ENERGY AVAILABLE TO TRANSFER",$0a
+                  .byte "THAT AMOUNT TO PHASERS.",$0a,0
+firing: .byte $0a,"FIRING ",0
+unitsofphasers: .byte " UNITS OF PHASERS.",$0a,0
+
+tens:  .byte 0, 10, 20
+div3: .byte 0, 0, 0, 1, 1, 1, 2, 2, 2, 3
+      .byte 3, 3, 4, 4, 4, 5, 5, 5, 6, 6
+      .byte 6, 7, 7, 7, 8, 8, 8, 9, 9, 9
+rem3: .byte 0, 1, 2, 0, 1, 2, 0, 1, 2, 0
+      .byte 1, 2, 0, 1, 2, 0, 1, 2, 0, 1
+      .byte 2, 0, 1, 2, 0, 1, 2, 0, 1, 2
